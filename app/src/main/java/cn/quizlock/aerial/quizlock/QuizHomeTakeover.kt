@@ -8,6 +8,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.SystemClock
 import android.provider.Settings
+import android.util.Log
+import android.view.KeyEvent
 import androidx.core.content.ContextCompat
 
 /**
@@ -28,6 +30,7 @@ import androidx.core.content.ContextCompat
  * The parent can switch the whole behaviour off from the setup page at any time.
  */
 object QuizHomeTakeover {
+    private const val TAG = "QLHome"
     private const val PREFS = "quizlock_home"
     private const val KEY_ENABLED = "takeover_enabled"
     private const val COOLDOWN_MS = 1_200L
@@ -125,6 +128,53 @@ object QuizHomeTakeover {
         allowUntil = SystemClock.elapsedRealtime() + ms
     }
 
+    /**
+     * Whether the key filter must stay on, called from upstream's updateKeyFilter. Takeover on
+     * means the filter stays on even where upstream would leave it off (Android 12+ with another
+     * app in front); upstream's own keysPassThrough / pad / mouse guards are applied by the
+     * caller, because on VIDAA the Home key never travels Android's input path at all -- the
+     * firmware daemon answers it (a "reason=homekey" broadcast plus a component start), so a
+     * filter would only detour every keypress for nothing.
+     */
+    fun filterDesired(context: Context): Boolean = isEnabled(context)
+
+    /**
+     * Replaces upstream's onKeyEvent while our filter is on.
+     * true  = consume (system never sees it); false = pass through unchanged;
+     * null  = no opinion, upstream's original key handling runs (takeover paused).
+     * Passing non-HOME keys through is what keeps VIDAA's firmware volume working: upstream's
+     * takeVolumeKey() must NOT run with the flag enabled on this TV.
+     */
+    fun onKeyEvent(service: AccessibilityService, event: KeyEvent): Boolean? {
+        val enabled = isEnabled(service)
+        if (!enabled) {
+            Log.i(TAG, "key ${event.keyCode} while takeover paused -> pass to upstream")
+            return null
+        }
+        if (event.keyCode != KeyEvent.KEYCODE_HOME) return false
+        val waiting = SystemClock.elapsedRealtime() < allowUntil
+        if (waiting) {
+            Log.i(TAG, "HOME during allowLeave window -> pass to system")
+            return false
+        }
+        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+            bringToFront(service)
+            Log.i(TAG, "HOME consumed before the system saw it")
+        }
+        return true
+    }
+
+    private fun bringToFront(service: AccessibilityService) {
+        val intent = service.packageManager.getLaunchIntentForPackage(service.packageName) ?: return
+        intent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP,
+        )
+        // Accessibility services are exempt from Android 10+'s background activity start limit.
+        runCatching { service.startActivity(intent) }
+    }
+
     private fun homePackages(context: Context): Set<String> = cachedHomes ?: run {
         val homes = context.packageManager.queryIntentActivities(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
@@ -172,15 +222,9 @@ object QuizHomeTakeover {
         if (now - lastBringBack < COOLDOWN_MS) return true
         lastBringBack = now
 
-        val intent = service.packageManager.getLaunchIntentForPackage(service.packageName) ?: return true
-        intent.addFlags(
-            Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP,
-        )
-        // Accessibility services are exempt from Android 10+'s background activity start limit,
-        // which is why this works where a plain foreground service or alarm would not.
-        runCatching { service.startActivity(intent) }
+        // Fallback for pathways that bypass the key filter (voice assistant, CEC, ADB injection,
+        // recent tasks): the stock desktop may still appear, so keep the window-event pull-back.
+        bringToFront(service)
         return true
     }
 }

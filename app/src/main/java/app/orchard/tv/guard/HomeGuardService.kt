@@ -1058,6 +1058,15 @@ class HomeGuardService : AccessibilityService() {
         filteringForCecOnly = cecWanted && !homeWanted
         var want = if (homeWanted || cecWanted) info.flags or flag else info.flags and flag.inv()
         if (keyFilterRival) want = want and AccessibilityServiceInfo.DEFAULT.inv()
+        // QL-BEGIN: on TVs where Home travels the normal input path but upstream would leave it
+        // unfiltered (Android 12+ with Aerial behind another app), QuizLock takes the key itself,
+        // so its desktop never appears. Where the firmware dispatches Home outside Android's
+        // input pipeline (keysPassThrough, e.g. VIDAA) the filter never sees the key, so the
+        // flag stays off exactly as upstream wants. Upstream's pad/mouse cautions are kept.
+        if (!screenOff && !padGame && !mouseHang && !keysPassThrough &&
+            cn.quizlock.aerial.quizlock.QuizHomeTakeover.filterDesired(this)
+        ) want = want or flag
+        // QL-END
         if (want == info.flags) return
         info.flags = want
         serviceInfo = info
@@ -1180,6 +1189,12 @@ class HomeGuardService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (!GuardSetup.isUserUnlocked(this)) return false
+        // QL-BEGIN: while QuizLock's HOME filter is on, own every key. Non-HOME keys pass straight
+        // back to the system (VIDAA's firmware volume would otherwise be swallowed by upstream's
+        // takeVolumeKey), and HOME is consumed before the window manager can show its desktop.
+        // Paused / no opinion -> upstream's original key handling runs unchanged.
+        cn.quizlock.aerial.quizlock.QuizHomeTakeover.onKeyEvent(this, event)?.let { return it }
+        // QL-END
         if (event.keyCode in VOLUME_KEYS) {
             return if (filteringForCecOnly || (isDefaultHome() && defaultHomeNeedsHomeFilter)) {
                 false
