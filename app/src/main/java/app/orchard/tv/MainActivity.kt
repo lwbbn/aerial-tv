@@ -65,6 +65,12 @@ import app.orchard.tv.ui.home.AerialStart
 import app.orchard.tv.ui.home.LiveFilm
 import app.orchard.tv.ui.home.asFocusedTile
 import app.orchard.tv.ui.theme.LocalReducedMotion
+// QL-BEGIN: imports for QuizLock's key gate over Home (see the Box in startReal).
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+// QL-END
 import app.orchard.tv.ui.home.TileFaces
 import app.orchard.tv.ui.theme.FontWarmup
 import app.orchard.tv.ui.theme.canvasDensity
@@ -246,6 +252,12 @@ class MainActivity : ComponentActivity() {
     private fun startReal(savedInstanceState: Bundle?) {
         if (realStarted) return
         realStarted = true
+        // QL-BEGIN: QuizLock's watcher counts watching time and raises quizzes over Home.
+        cn.quizlock.aerial.quizlock.QuizGate.start(this)
+        if (intent.action == cn.quizlock.aerial.quizlock.QuizControlReceiver.ACTION_FORCE) {
+            cn.quizlock.aerial.quizlock.QuizGate.preview()
+        }
+        // QL-END
         val fromLocked = locked
         if (locked) {
             locked = false
@@ -306,6 +318,26 @@ class MainActivity : ComponentActivity() {
                 fontScale = LocalDensity.current.fontScale,
             )
             CompositionLocalProvider(LocalReducedMotion provides reducedMotion, LocalDensity provides canvas) {
+                // QL-BEGIN: QuizLock's quiz lives above Home (and above the screensaver composable
+                // Home itself draws), so nothing can cover an unanswered question. While a quiz is
+                // up this Box consumes every remote key and drives the 2×2 option grid itself;
+                // otherwise HomeScreen's tile-grid key handler wins and the arrows go dead.
+                androidx.compose.foundation.layout.Box(
+                    androidx.compose.ui.Modifier.onPreviewKeyEvent { e ->
+                        if (cn.quizlock.aerial.quizlock.QuizGate.quiz == null) return@onPreviewKeyEvent false
+                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                        when (e.nativeKeyEvent.keyCode) {
+                            android.view.KeyEvent.KEYCODE_DPAD_UP -> cn.quizlock.aerial.quizlock.QuizGate.moveFocus(-1, 0)
+                            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> cn.quizlock.aerial.quizlock.QuizGate.moveFocus(1, 0)
+                            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> cn.quizlock.aerial.quizlock.QuizGate.moveFocus(0, -1)
+                            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> cn.quizlock.aerial.quizlock.QuizGate.moveFocus(0, 1)
+                            android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER,
+                            android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> cn.quizlock.aerial.quizlock.QuizGate.answerFocused()
+                            else -> Unit
+                        }
+                        true
+                    },
+                ) {
                 HomeScreen(
                     vm = vm,
                     onLaunch = ::launch,
@@ -315,6 +347,10 @@ class MainActivity : ComponentActivity() {
                     // Posted so the key-up of the Back press that started it does not end it at once.
                     onStartScreensaver = { idleHandler.postDelayed({ startScreensaver(asked = true) }, 150) },
                 )
+                cn.quizlock.aerial.quizlock.QuizOverlay()
+                cn.quizlock.aerial.quizlock.QuizNotice()
+                }
+                // QL-END
             }
         }
         if (Build.VERSION.SDK_INT >= 29 && uhd > 1f) {
@@ -872,6 +908,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // QL-BEGIN: quiz control from a local command (ADB / parent app). Kept before the locked
+        // check because the quiz must be able to raise itself even over a locked boot window.
+        if (intent.action == cn.quizlock.aerial.quizlock.QuizControlReceiver.ACTION_FORCE) {
+            cn.quizlock.aerial.quizlock.QuizGate.start(this)
+            cn.quizlock.aerial.quizlock.QuizGate.preview()
+            return
+        }
+        if (intent.action == cn.quizlock.aerial.quizlock.QuizControlReceiver.ACTION_SET) {
+            cn.quizlock.aerial.quizlock.QuizGate.start(this)
+            val ctx = applicationContext
+            val old = cn.quizlock.aerial.quizlock.QuizPolicy.load(ctx)
+            cn.quizlock.aerial.quizlock.QuizPolicy.save(ctx, old.copy(
+                enabled = intent.getBooleanExtra("enabled", old.enabled),
+                intervalMinutes = intent.getIntExtra("interval", old.intervalMinutes),
+                unlockMinutes = intent.getIntExtra("unlock", old.unlockMinutes),
+            ))
+            cn.quizlock.aerial.quizlock.QuizGate.refresh()
+            return
+        }
+        // QL-END
         if (locked) return
         DiagLog.i("onNewIntent ${intent.action}")
         if (intent.getBooleanExtra(EXTRA_WOKE, false)) openBootSource("brought back on wake")
@@ -1036,6 +1092,10 @@ class MainActivity : ComponentActivity() {
 
     /** Opens an app, growing it out of its tile. */
     private fun launch(app: AppEntry, bounds: Rect?) {
+        // QL-BEGIN: a QuizLock quiz is up: no app opens until it is answered. The quiz layer over
+        // Home takes focus, so a launch from a stale key press dies here.
+        if (cn.quizlock.aerial.quizlock.QuizGate.quiz != null) return
+        // QL-END
         // Kids and Elders mode shows only its own tiles, and none while locked; this is the last word.
         if (Restricted.active && (app.key !in Restricted.allowed || Restricted.lock != null)) {
             DiagLog.i("kids: ${app.key} not opened")

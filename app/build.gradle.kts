@@ -15,12 +15,16 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "app.orchard.tv"
+        // QuizLock derivative: our own applicationId, keeps upstream's namespace and code
+        // untouched (import lines still say app.orchard.tv, which is fine). The different id also
+        // makes Updates.canInstall() false, so this copy never "updates" itself onto the official
+        // release — exactly what a derivative wants.
+        applicationId = "cn.quizlock.aerial"
         // Android 5.0. Compose 1.10 and later need 6.0, so the Compose BOM below stays on 1.9.
         minSdk = 21
         targetSdk = 34
-        versionCode = 116
-        versionName = "1.85"
+        versionCode = 1
+        versionName = "0.1.0-ql"
         // `./gradlew -Pdiag ...`: a build for one reporter's TV whose logcat shows no app lines;
         // see system/DiagLog.kt.
         val diag = project.hasProperty("diag")

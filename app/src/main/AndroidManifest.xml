@@ -205,5 +205,17 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/home_guard" />
         </service>
+
+        <!-- QL-BEGIN: QuizLock's local command channel (ADB / parent app). -->
+        <receiver
+            android:name="cn.quizlock.aerial.quizlock.QuizControlReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="cn.quizlock.aerial.QUIZ_FORCE" />
+                <action android:name="cn.quizlock.aerial.QUIZ_SET" />
+                <action android:name="cn.quizlock.aerial.QUIZ_STATUS" />
+            </intent-filter>
+        </receiver>
+        <!-- QL-END -->
     </application>
 </manifest>
