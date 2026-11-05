@@ -121,6 +121,11 @@ fun QuizPanel(vm: HomeViewModel, takeFocus: Boolean) {
             Glyph.Play, "立即出一道题（预览）",
             onClick = { QuizGate.preview(); vm.overlay = Overlay.None },
         )
+        MenuRow(
+            Glyph.Shield, "桌面与守护 · 防退出",
+            trailing = if (HomeSetup.isHomeRoleHeld(context)) "已设置 ›" else "去设置 ›",
+            onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Setup) },
+        )
 
         Spacer(Modifier.height(12.dp))
         Column(Modifier.padding(horizontal = 14.dp)) {

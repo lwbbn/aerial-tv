@@ -397,10 +397,18 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
             MenuRow(Glyph.Download, stringResource(R.string.cc_self_compile), onClick = { SelfCompile.run(context, auto = false) })
         }
 
-        // Installed from the APK alone: how to finish, on the TV or with a computer.
-        if (vm.homeStatus == HomeStatus.NotDefault) {
+        // QL-BEGIN: the derived build keeps this door visible even after it becomes the default
+        // home, so a parent can always switch back or check Home Guard. Other flavors unchanged.
+        if (BuildConfig.FLAVOR == "guard") {
+            MenuRow(
+                Glyph.Shield, "桌面与守护 · 防退出",
+                onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Setup) },
+                trailing = if (vm.homeStatus == HomeStatus.Default) "已设置 ›" else "去设置 ›",
+            )
+        } else if (vm.homeStatus == HomeStatus.NotDefault) {
             MenuRow(Glyph.Shield, stringResource(R.string.cc_setup_title), onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Setup) }, trailing = "›")
         }
+        // QL-END
 
         Spacer(Modifier.height(8.dp))
         val (dot, text) = when (vm.homeStatus) {
@@ -583,6 +591,13 @@ private fun UpdateNotes(notes: List<ReleaseNotes>) {
  */
 @Composable
 private fun SetupPage(vm: HomeViewModel, takeFocus: Boolean, onOpen: (android.content.Intent) -> Unit) {
+    // QL-BEGIN: the derived build has its own one-tap home-role setup; upstream's ADB-oriented
+    // QR page is kept untouched below for the standard flavor.
+    if (BuildConfig.FLAVOR == "guard") {
+        cn.quizlock.aerial.quizlock.QuizSetupPage(vm, takeFocus)
+        return
+    }
+    // QL-END
     val context = LocalContext.current
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {

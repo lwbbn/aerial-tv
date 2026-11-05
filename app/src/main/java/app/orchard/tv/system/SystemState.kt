@@ -172,6 +172,10 @@ object SystemProbe {
     }
 
     fun homeStatus(context: Context): HomeStatus {
+        // QL-BEGIN: on Android 10+ the HOME role, not resolveActivity, decides where Home goes.
+        // VIDAA keeps naming its stock launcher in resolveActivity even after the role changed.
+        if (cn.quizlock.aerial.quizlock.HomeSetup.isHomeRoleHeld(context)) return HomeStatus.Default
+        // QL-END
         val resolved = context.packageManager.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
             PackageManager.MATCH_DEFAULT_ONLY,

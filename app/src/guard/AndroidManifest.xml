@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- QL-BEGIN: make the QuizLock build eligible for the Android HOME role.
+
+     Upstream's guard flavor deliberately declares no CATEGORY_HOME, because a few Chinese TV
+     firmwares refuse to install third-party packages that declare it. That also means the TV's
+     "choose default home app" list never contains the guard build, and pressing Home leaves it
+     at once. The Halo derivative installed on our VIDAA TV declares HOME and installs fine, so
+     for this build we add the same filter instead of asking the parent to run ADB commands.
+
+     This file only ADDS filters: the LAUNCHER / LEANBACK_LAUNCHER filters from the main manifest
+     stay, so the app icon is still visible in the TV's app list. Upstream files stay untouched.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name="app.orchard.tv.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Coocaa's private Home category, same as upstream's standard flavor. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME.CC" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+<!-- QL-END -->
