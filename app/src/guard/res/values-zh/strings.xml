@@ -2,12 +2,12 @@
 <!-- QL-BEGIN: upstream has values-zh/strings.xml, which outranks guard/res/values on a Chinese TV.
      Override the same keys here so the panel never says "Aerial" in the derived build. -->
 <resources>
-    <string name="guard_name">小课间桌面守护</string>
-    <string name="guard_description">让小课间保持在主屏幕，按 Home 不会退回电视原桌面。不读取屏幕内容。</string>
-    <string name="cc_setup_title">桌面与守护 · 让小课间不被退出</string>
-    <string name="cc_setup_body">现在按 Home 会退回电视原桌面。点「设为默认桌面」，在系统弹窗里确认一次即可。</string>
-    <string name="cc_home_default">小课间已是默认桌面</string>
-    <string name="cc_home_guarded">桌面守护已开启</string>
-    <string name="cc_home_not_default">还没设为默认桌面，按 Home 会退出</string>
+    <string name="guard_name">小课间</string>
+    <string name="guard_description">用于在主屏幕启动时自动进入小课间。不读取屏幕内容。</string>
+    <string name="cc_setup_title">主屏幕设置</string>
+    <string name="cc_setup_body">在系统里把小课间设为主屏幕应用，开机后即可自动进入。</string>
+    <string name="cc_home_default">小课间是当前主屏幕</string>
+    <string name="cc_home_guarded">辅助功能已开启</string>
+    <string name="cc_home_not_default">当前主屏幕是电视桌面</string>
 </resources>
 <!-- QL-END -->

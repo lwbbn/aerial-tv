@@ -401,7 +401,7 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
         // home, so a parent can always switch back or check Home Guard. Other flavors unchanged.
         if (BuildConfig.FLAVOR == "guard") {
             MenuRow(
-                Glyph.Shield, "桌面与守护 · 防退出",
+                Glyph.Shield, "主屏幕设置",
                 onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Setup) },
                 trailing = if (vm.homeStatus == HomeStatus.Default) "已设置 ›" else "去设置 ›",
             )

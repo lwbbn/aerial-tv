@@ -105,7 +105,7 @@ fun QuizPanel(vm: HomeViewModel, takeFocus: Boolean) {
         Spacer(Modifier.height(12.dp))
         MenuRow(
             Glyph.Kids,
-            if (policy.enabled) "答题守护：已开启" else "答题守护：已暂停",
+            if (policy.enabled) "小课间：运行中" else "小课间：已暂停",
             trailing = if (policy.enabled) "暂停 ›" else "开启 ›",
             onClick = {
                 QuizGate.applyPolicy(context, policy.copy(enabled = !policy.enabled))
@@ -122,8 +122,8 @@ fun QuizPanel(vm: HomeViewModel, takeFocus: Boolean) {
             onClick = { QuizGate.preview(); vm.overlay = Overlay.None },
         )
         MenuRow(
-            Glyph.Shield, "桌面与守护 · 防退出",
-            trailing = if (HomeSetup.isHomeRoleHeld(context)) "已设置 ›" else "去设置 ›",
+            Glyph.Shield, "主屏幕设置",
+            trailing = "查看 ›",
             onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Setup) },
         )
 

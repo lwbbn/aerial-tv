@@ -74,26 +74,33 @@ object HomeSetup {
         service.javaClass.getMethod(method, String::class.java).invoke(service, ROLE_HOME)
     }.getOrNull()
 
-    /** The RoleManager answer first: VIDAA's resolveActivity(HOME) can still name the stock home. */
-    fun isHomeRoleHeld(context: Context): Boolean {
-        val role = roleService(context) ?: return isResolvedHome(context)
-        val held = roleInvoke(role, "isRoleHeld") as? Boolean == true
-        return held || isResolvedHome(context)
+    /** Only says the system's role list picked us. On VIDAA this is NOT where the Home key goes. */
+    fun isRoleHeld(context: Context): Boolean {
+        val role = roleService(context) ?: return false
+        return roleInvoke(role, "isRoleHeld") as? Boolean == true
     }
 
-    /** Fallback for pre-10 TVs and for firmwares that answer HOME without using roles. */
+    /**
+     * The real answer: what PackageManager resolves HOME to. VIDAA keeps a vendor-preferred
+     * stock launcher here (`persist.vt.use_home_pkg` / SecondScreen) even after ROLE_HOME was
+     * granted to us, so the role alone made the panel claim "already set" while Home still went
+     * to the TV's own desktop. Every visible "is it set" answer must go through this, not [isRoleHeld].
+     */
     fun isResolvedHome(context: Context): Boolean =
         context.packageManager.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
             PackageManager.MATCH_DEFAULT_ONLY,
         )?.activityInfo?.packageName == context.packageName
 
-    /** Whether our accessibility guard is enabled in the system list or currently bound. */
+    /** Kept for the call sites that ask "are we the home app": only the real resolution counts. */
+    fun isHomeRoleHeld(context: Context): Boolean = isResolvedHome(context)
+
+    /** Whether OUR accessibility service is enabled in the system list or currently bound. */
     fun isGuardOn(context: Context): Boolean {
         val enabled = runCatching {
             Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
         }.getOrDefault("")
-        return "HomeGuardService" in enabled ||
+        return enabled.contains(context.packageName) ||
             runCatching { app.orchard.tv.guard.HomeGuardService.isRunning }.getOrDefault(false)
     }
 
@@ -101,13 +108,14 @@ object HomeSetup {
      * The one-tap path. The RoleManager request MUST go through Activity.startActivityForResult:
      * RequestRoleActivity reads getCallingPackage(), and a plain startActivity leaves it null, on
      * which the system closes the dialog at once (seen on MuMu / Android 12: "Package name cannot
-     * be null or empty"). With an Activity we ask the system's own confirmation dialog; without
-     * one (or when the role is already ours) we fall back to the default-home settings page.
+     * be null or empty"). Once the role is already recorded (VIDAA), asking again changes nothing,
+     * so we open the system's own home-app list instead: the parent can see and pick 小课间 there,
+     * which is exactly the page Halo TV opens.
      */
     @Suppress("DEPRECATION")
     fun requestHomeRole(context: Context, activity: Activity? = null): Boolean {
         val role = roleService(context)
-        if (role != null && activity != null && !isHomeRoleHeld(context)) {
+        if (role != null && activity != null && !isRoleHeld(context)) {
             val request = roleInvoke(role, "createRequestRoleIntent") as? Intent
             if (request != null) {
                 val started = runCatching {
@@ -134,7 +142,9 @@ object HomeSetup {
         // On Android 10+ this is the same RoleManager UI the one-tap path uses, in page form.
         Intent(Settings.ACTION_HOME_SETTINGS),
         Intent("android.settings.MANAGE_DEFAULT_APPS_SETTINGS"),
-        Intent.createChooser(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), "选择主屏幕"),
+        // A plain HOME intent (not createChooser) lets Android offer "Always", which older TVs
+        // still use to store the preferred home instead of the RoleManager role.
+        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
         Intent(Settings.ACTION_SETTINGS),
         // VIDAA: its own settings app, in case ACTION_SETTINGS is filtered out.
         Intent(Settings.ACTION_SETTINGS).setPackage("com.android.tv.settings"),
@@ -172,8 +182,10 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 /**
- * The three rows shown in Control Center's setup page. Status is re-read on every ON_RESUME, so
- * coming back from the system dialog immediately shows "already set" without reopening the panel.
+ * The setup rows in Control Center. There are only two, and they open different system pages:
+ * the home-app picker and the accessibility/settings page. The status line comes from what
+ * PackageManager actually resolves HOME to, so a TV that recorded ROLE_HOME but still shows its
+ * own desktop is never reported as "already set".
  * [onOpen] is the upstream callback (parental-PIN wrapped); when null we start the intents here,
  * which is what the QuizLock parent panel does.
  */
@@ -196,7 +208,8 @@ fun HomeSetupRows(onOpen: ((Intent) -> Unit)? = null) {
         }
     }
 
-    val defaultHome = remember(tick) { HomeSetup.isHomeRoleHeld(context) }
+    val isHome = remember(tick) { HomeSetup.isResolvedHome(context) }
+    val rolePicked = remember(tick) { HomeSetup.isRoleHeld(context) }
     val guardOn = remember(tick) { HomeSetup.isGuardOn(context) }
     val open: (Intent) -> Unit = onOpen ?: { intent ->
         runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -204,33 +217,41 @@ fun HomeSetupRows(onOpen: ((Intent) -> Unit)? = null) {
     }
 
     Column {
+        Column(Modifier.padding(horizontal = 14.dp)) {
+            BasicText(
+                "当前主屏幕应用：${if (isHome) "小课间" else "电视桌面"}",
+                style = Type.Caption.copy(color = Palette.SecondaryLabel),
+            )
+            if (!isHome && rolePicked) {
+                Spacer(Modifier.height(4.dp))
+                BasicText(
+                    "系统里已选中小课间；部分电视还需开启下面的「辅助功能」。",
+                    style = Type.Caption.copy(color = Palette.TertiaryLabel),
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         MenuRow(
             Glyph.Shield,
-            "① 设为默认桌面",
-            trailing = if (defaultHome) "已设置 ✓" else "去设置 ›",
+            "主屏幕应用",
+            trailing = "选择 ›",
             onClick = { HomeSetup.requestHomeRole(context, activity) },
         )
         MenuRow(
             Glyph.Check,
-            "② 开启桌面守护",
+            "辅助功能",
             trailing = if (guardOn) "已开启 ✓" else "去开启 ›",
             onClick = { open(HomeSetup.guardSettingsIntent(context)) },
         )
-        MenuRow(
-            Glyph.Moon,
-            "系统默认桌面设置",
-            trailing = "打开 ›",
-            onClick = { open(HomeSetup.homeSettingsIntent(context)) },
-        )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Column(Modifier.padding(horizontal = 14.dp)) {
             BasicText(
-                if (defaultHome) "已生效：开机和按 Home 都会回到小课间。" else "点第 ① 项，在系统弹窗里确认即可，不用电脑和 ADB；按 Home 就不会再退出。",
+                "在「主屏幕应用」列表里选择「小课间」；部分电视会直接弹出确认框。",
                 style = Type.Caption.copy(color = Palette.SecondaryLabel),
             )
             Spacer(Modifier.height(4.dp))
             BasicText(
-                "第 ② 项可选；第 ③ 项能手动选桌面或换回原桌面。VIDAA 没有直达无障碍页面，会打开系统设置。",
+                "「辅助功能」用于开机后自动进入小课间，可选。部分电视会打开系统设置首页，请在「通用 / 辅助功能」中找到「小课间」并开启。",
                 style = Type.Caption.copy(color = Palette.TertiaryLabel),
             )
         }
@@ -248,14 +269,14 @@ fun QuizSetupPage(vm: HomeViewModel, takeFocus: Boolean) {
     }
     Column(Modifier.heightIn(max = 470.dp).verticalScroll(rememberScrollState())) {
         MenuRow(
-            Glyph.ChevronLeft, "桌面与守护 · 让小课间不被退出",
+            Glyph.ChevronLeft, "主屏幕设置",
             focusRequester = first,
             onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Main) },
         )
         Spacer(Modifier.height(10.dp))
         Column(Modifier.padding(horizontal = 14.dp)) {
             BasicText(
-                "现在按 Home 会退回电视原桌面，答题守护跟着失效。下面第 ① 项点一次，在系统弹窗里确认即可。",
+                "把小课间设为电视的主屏幕应用，开机和返回主屏幕时即可直接进入。",
                 style = Type.Caption.copy(color = Palette.SecondaryLabel),
             )
         }
@@ -264,7 +285,7 @@ fun QuizSetupPage(vm: HomeViewModel, takeFocus: Boolean) {
         Spacer(Modifier.height(14.dp))
         Column(Modifier.padding(horizontal = 14.dp)) {
             BasicText(
-                "改出题间隔、教材与当前单元：回控制面板 →「小课间 · 家长设置」→ 手机扫码。",
+                "调整出题间隔、教材与当前单元：回控制面板 →「小课间 · 家长设置」→ 手机扫码。",
                 style = Type.Caption.copy(color = Palette.TertiaryLabel),
             )
         }
