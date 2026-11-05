@@ -283,6 +283,22 @@
     .agrid.sorting .atile:not(.lift) { transition: none; }
     .toast { transform: translate(-50%, 0); }
   }
+  /* QL-BEGIN: the parent's QuizLock tab. Kept in one block so an upstream rebase only ever
+     touches marked lines; no i18n table entries are added (this page is Chinese-only). */
+  .ql-num, .ql-text {
+    width: 96px; max-width: 45%; font: inherit; font-size: 17px; text-align: right;
+    color: var(--label); background: none; border: 0; outline: none; padding: 0;
+  }
+  .ql-num { width: 58px; max-width: 25%; }
+  .ql-select {
+    max-width: 55%; font: inherit; font-size: 15px; text-align: right;
+    color: var(--secondary); background: none; border: 0; outline: none;
+  }
+  .ql-select option { color: #000; }
+  .ql-status { color: var(--secondary); font-size: 13px; margin: 8px 4px 0; }
+  .ql-pin { display: none; }
+  .ql-pin.on { display: flex; }
+  /* QL-END */
 </style>
 </head>
 <body>
@@ -381,12 +397,57 @@
   </div>
   <p class="foot" data-i18n="feedback_hint"></p>
 </section>
+
+<!-- QL-BEGIN: the parent's QuizLock settings. Same page, one extra tab; no new network service. -->
+<section data-tab="quiz" hidden>
+  <h2 class="big">小课间 · 儿童答题守护</h2>
+  <div class="list">
+    <label class="item"><span class="txt">启用答题守护<span class="sub">看满设定时间自动出题，答对才继续看</span></span><input class="switch" type="checkbox" id="qlEnabled"></label>
+  </div>
+
+  <h2>出题节奏</h2>
+  <div class="list">
+    <label class="item"><span class="txt">每隔多久出一道题</span><input class="ql-num" type="number" id="qlInterval" min="5" max="120" inputmode="numeric"><span class="ks-unit">分钟</span></label>
+    <label class="item"><span class="txt">答对后继续看</span><input class="ql-num" type="number" id="qlUnlock" min="1" max="120" inputmode="numeric"><span class="ks-unit">分钟</span></label>
+    <label class="item"><span class="txt">最多换题次数</span><input class="ql-num" type="number" id="qlRetry" min="1" max="10" inputmode="numeric"><span class="ks-unit">次</span></label>
+  </div>
+  <p class="foot">答错不惩罚，会换一道同知识点的类似题；次数用完后放行为止。</p>
+
+  <h2>学习进度</h2>
+  <div class="list">
+    <label class="item"><span class="txt">年级</span>
+      <select class="ql-select" id="qlGrade"><option value="G5">小学五年级</option></select></label>
+    <label class="item"><span class="txt">册别</span>
+      <select class="ql-select" id="qlTerm"><option value="AUTO">自动（按月份）</option><option value="UP">上册</option><option value="DOWN">下册</option></select></label>
+    <label class="item"><span class="txt">教材版本</span>
+      <select class="ql-select" id="qlBook"><option value="PEP">人教版</option><option value="BSD">北师大版</option><option value="SJ">苏教版</option><option value="CUSTOM">自定义</option></select></label>
+    <label class="item field"><span class="txt">当前单元</span><input class="ql-text" type="text" id="qlUnit" placeholder="如：小数乘法" maxlength="40"></label>
+  </div>
+  <p class="foot">题目挂知识点而非章节号，换教材只换映射；当前单元用于优先抽最近学的内容。</p>
+
+  <h2>家长 PIN</h2>
+  <div class="list">
+    <label class="item ql-pin" id="qlPinRow"><span class="txt">电视 PIN<span class="sub">在电视「控制中心 → 设置」里设置</span></span><input class="ql-text" type="password" id="qlPin" placeholder="4 位" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+    <div class="item"><span class="txt" id="qlPinHint">未设置 PIN，同网设备可直接保存</span></div>
+  </div>
+
+  <div class="kids-actions">
+    <button class="btn" id="qlSave">保存到电视</button>
+    <button class="btn plain" id="qlPreview">立即出一道题</button>
+  </div>
+  <p class="ql-status" id="qlStatus"></p>
+  <p class="foot">地址和随机令牌只显示在电视的「小课间」面板上，别人猜不到；设置 PIN 后每次保存都要验证。</p>
+</section>
+<!-- QL-END -->
 </main>
 
 <nav role="tablist">
   <button role="tab" data-go="home"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="7" height="6" rx="1.8"/><rect x="13.5" y="4.5" width="7" height="6" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="6" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="6" rx="1.8"/></svg><span data-i18n="tab_home"></span></button>
   <button role="tab" data-go="looks"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="3"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M3.5 17l5-5 4 4 2.5-2.5 5.5 5"/></svg><span data-i18n="tab_looks"></span></button>
   <button role="tab" data-go="more"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="8" cy="12" r=".6" fill="currentColor"/><circle cx="12" cy="12" r=".6" fill="currentColor"/><circle cx="16" cy="12" r=".6" fill="currentColor"/></svg><span data-i18n="tab_more"></span></button>
+  <!-- QL-BEGIN -->
+  <button role="tab" data-go="quiz"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.2 12.4l2.5 2.5 4.9-5.2"/></svg><span>小课间</span></button>
+  <!-- QL-END -->
 </nav>
 
 <div class="sheet-wrap" id="sheet" hidden>
@@ -1470,8 +1531,11 @@ function kidsRefused(next) {
 function take(next) { state = next; stateJson = ''; render(); }
 
 /* Tabs. The tab is kept in the address (#home) and on the phone, and each tab keeps its own scroll. */
-const TABS = ['home', 'looks', 'more'];
-const TITLES = { home: 'tab_home', looks: 'looks_title', more: 'tab_more' };
+// QL-BEGIN: one extra tab. TITLES values are i18n keys; '小课间' has no key, and t() falls back
+// to the key itself, so the Chinese name shows without touching the big translation tables.
+const TABS = ['home', 'looks', 'more', 'quiz'];
+const TITLES = { home: 'tab_home', looks: 'looks_title', more: 'tab_more', quiz: '小课间' };
+// QL-END
 // The four tabs of 1.46 and 1.47's first builds.
 const OLD_TABS = { wallpaper: 'looks', screensaver: 'looks' };
 const scrolls = {};
@@ -2398,12 +2462,67 @@ function kidsSettings() {
 $('#kidsPinForm').onsubmit = e => { e.preventDefault(); const v = $('#kidsPin').value.trim(); if (v.length === 4) kidsUnlock(v); };
 $('#kidsPin').oninput = e => { const v = e.target.value.trim(); if (v.length === 4) kidsUnlock(v); };
 
+/* QL-BEGIN: the parent's QuizLock tab, wired into the page's existing poll. */
+function renderQuiz() {
+  const q = (state && state.quiz) || null;
+  if (!q) return;
+  const $i = id => document.getElementById(id);
+  if (document.activeElement !== $i('qlInterval')) $i('qlInterval').value = q.quiz_interval_min;
+  if (document.activeElement !== $i('qlUnlock')) $i('qlUnlock').value = q.unlock_duration_min;
+  if (document.activeElement !== $i('qlRetry')) $i('qlRetry').value = q.max_retry;
+  if (document.activeElement !== $i('qlUnit')) $i('qlUnit').value = q.current_unit || '';
+  $i('qlEnabled').checked = !!q.enabled;
+  $i('qlGrade').value = q.grade;
+  $i('qlTerm').value = q.term;
+  $i('qlBook').value = q.textbook_version;
+  $i('qlPinRow').classList.toggle('on', !!q.pin_required);
+  $i('qlPinHint').textContent = q.pin_required
+    ? '电视已设 PIN，保存与预览都需要填写'
+    : '未设置 PIN，同网设备可直接保存（建议到电视设置里设一个）';
+  $i('qlStatus').textContent = '本轮已看 ' + q.watched_min + ' 分钟 · 约 ' + q.next_quiz_min +
+    ' 分钟后出题 · 内置题库 ' + q.question_count + ' 道 · 配置版本 v' + q.config_version +
+    (q.quiz_up ? ' · 正在答题' : '');
+}
+async function qlSave() {
+  const $i = id => document.getElementById(id);
+  kidsPin = $i('qlPin').value.trim();
+  const body = {
+    enabled: $i('qlEnabled').checked ? '1' : '0',
+    quiz_interval_min: $i('qlInterval').value,
+    unlock_duration_min: $i('qlUnlock').value,
+    max_retry: $i('qlRetry').value,
+    grade: $i('qlGrade').value,
+    term: $i('qlTerm').value,
+    textbook_version: $i('qlBook').value,
+    current_unit: $i('qlUnit').value
+  };
+  try {
+    const next = await api('api/quiz/config', body);
+    if (next.pinWrong) { toast('家长 PIN 不对，或错误次数过多，请稍后再试'); return; }
+    if (!next.saved) throw new Error('not saved');
+    state.quiz = next; stateJson = ''; render();
+    toast('已保存到电视');
+  } catch (e) { toast('保存失败，请检查手机和电视是否在同一 WiFi'); }
+}
+async function qlPreview() {
+  kidsPin = document.getElementById('qlPin').value.trim();
+  try {
+    const next = await api('api/quiz/preview', {});
+    if (next.pinWrong) { toast('家长 PIN 不对'); return; }
+    toast('已在电视上出一道题');
+  } catch (e) { toast('没有连上电视'); }
+}
+document.getElementById('qlSave').onclick = qlSave;
+document.getElementById('qlPreview').onclick = qlPreview;
+/* QL-END */
+
 function render() {
   if (!state) return;
   // The page polls; skip the rebuild when nothing changed, so pictures do not flicker and taps are not lost.
   const json = JSON.stringify(state);
   if (json === stateJson) return;
   stateJson = json;
+  renderQuiz();
   renderKids();
   renderWallpapers();
   renderScreensaver();

@@ -32,6 +32,7 @@ data class QuizPolicy(
                 textbook = p.getString("textbook", "PEP") ?: "PEP",
                 subjectWeights = mapOf("数学" to 0.4, "语文" to 0.3, "英语" to 0.3),
                 currentUnit = p.getString("current_unit", "") ?: "",
+                configVersion = p.getInt("config_version", 1),
             )
         }
 
@@ -45,6 +46,7 @@ data class QuizPolicy(
                 .putString("term", policy.term)
                 .putString("textbook", policy.textbook)
                 .putString("current_unit", policy.currentUnit)
+                .putInt("config_version", policy.configVersion)
                 .apply()
         }
 

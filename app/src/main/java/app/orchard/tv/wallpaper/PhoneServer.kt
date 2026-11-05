@@ -29,6 +29,9 @@ import app.orchard.tv.system.Diagnostics
 import app.orchard.tv.system.currentNetwork
 import app.orchard.tv.settings.FocusStyle
 import app.orchard.tv.weather.Weather
+// QL-BEGIN: QuizLock's parent configuration, served over this same phone page.
+import cn.quizlock.aerial.quizlock.QuizControl
+// QL-END
 import androidx.core.graphics.createBitmap
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -65,11 +68,34 @@ class PhoneServer private constructor(private val context: Context, private val 
             // In Kids and Elders mode the page changes nothing without the parental PIN: anyone on
             // the network with the address (a child with a phone) could otherwise undo the mode.
             // The page sends it with each change once it is entered (header X-Aerial-Pin).
+            // QL-BEGIN: /api/quiz/* does its own PIN check below, so Kids mode cannot pre-empt it
+            // with a different (Kids-specific) refusal the parent's page cannot explain.
             if (session.method == Method.POST && path != "/api/kids/unlock" && (Restricted.active || path.startsWith("/api/kids/")) &&
-                path != "/api/kids/start" && !pinOk(session.headers["x-aerial-pin"])
+                path != "/api/kids/start" && !path.startsWith("/api/quiz/") && !pinOk(session.headers["x-aerial-pin"])
             ) return json(state().put("saved", false).put("kidsLocked", true))
+            // QL-END
             when {
                 path == "/" -> newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", page())
+                // QL-BEGIN: the parent's QuizLock panel. A read is free; every write needs the
+                // parental PIN once one is set, exactly like /api/kids/* above. The token in the
+                // address (shown only on the TV) keeps the page off the rest of the network.
+                path == "/api/quiz/state" -> json(QuizControl.state(context))
+                session.method == Method.POST && path == "/api/quiz/config" -> {
+                    // pinWrong, not kidsLocked: the latter makes the page show the Kids-mode PIN
+                    // notice and clear the PIN the parent just typed.
+                    if (AerialSettings.pinSet && !pinOk(session.headers["x-aerial-pin"]))
+                        json(QuizControl.state(context).put("saved", false).put("pinWrong", true))
+                    else json(QuizControl.configure(context, form(session)))
+                }
+                session.method == Method.POST && path == "/api/quiz/preview" -> {
+                    if (AerialSettings.pinSet && !pinOk(session.headers["x-aerial-pin"]))
+                        json(QuizControl.state(context).put("saved", false).put("pinWrong", true))
+                    else {
+                        onMain { cn.quizlock.aerial.quizlock.QuizGate.preview() }
+                        json(QuizControl.state(context).put("saved", true))
+                    }
+                }
+                // QL-END
                 session.method == Method.POST && path == "/api/kids/unlock" -> {
                     val ok = pinOk(form(session)["pin"])
                     json(state().put("saved", ok).put("pinRight", ok))
@@ -241,6 +267,9 @@ class PhoneServer private constructor(private val context: Context, private val 
             .put("videoRoom", ScreensaverVideos.room(context))
             .put("focusStyle", AerialSettings.focusStyle.key)
             .put("kids", kidsState())
+            // QL-BEGIN: the parent's QuizLock policy rides along with the page's normal poll.
+            .put("quiz", QuizControl.state(context))
+            // QL-END
             .put("wallpaperAlwaysMoves", AerialSettings.wallpaperAlwaysMoves)
             .put("showWeather", AerialSettings.showWeather)
             .put("screensaverClock", AerialSettings.screensaverClock)

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- QL-BEGIN: a clock ring with a check mark: watch a while, answer, keep watching.
+     Everything sits inside the 66dp safe zone of the 108dp adaptive canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+
+    <!-- the full ring, dim -->
+    <path android:pathData="M54,30 A24,24 0 1,1 53.99,30"
+        android:strokeColor="#FFF0F6FF" android:strokeWidth="6"
+        android:strokeLineCap="round" android:fillColor="#00000000" />
+
+    <!-- watched-time progress arc, bright blue -->
+    <path android:pathData="M54,30 A24,24 0 1,1 33.2,66"
+        android:strokeColor="#FF4C8DFF" android:strokeWidth="6"
+        android:strokeLineCap="round" android:fillColor="#00000000" />
+
+    <!-- the check -->
+    <path android:pathData="M42,55 L50.5,63 L67,45"
+        android:strokeColor="#FFF0F6FF" android:strokeWidth="7"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>
+<!-- QL-END -->

@@ -249,6 +249,27 @@ object QuizGate {
         scheduleNext()
     }
 
+    /**
+     * A parent-approved policy from the phone page. Kept here (not in QuizControl) so the timing
+     * loop, the in-memory policy and the persisted one can never disagree. Safe from the phone
+     * server's IO thread: state changes are posted back to the main looper.
+     */
+    fun applyPolicy(ctx: Context, next: QuizPolicy) {
+        QuizPolicy.save(ctx, next)
+        handler.post {
+            if (app == null) { app = ctx.applicationContext; loadState() }
+            policy = next
+            if (!next.enabled) { quiz = null; notice = null; hint = null; flash = null }
+            picker = QuestionPicker(bank = QuizBank.all)
+            watchMs = 0L
+            lastTickAt = 0L
+            saveState()
+            scheduleNext()
+            DiagLog.i("$TAG: policy v${next.configVersion} on=${next.enabled} " +
+                "interval=${next.intervalMinutes}min unlock=${next.unlockMinutes}min")
+        }
+    }
+
     fun setEnabled(on: Boolean) {
         policy = policy.copy(enabled = on)
         QuizPolicy.save(app!!, policy)

@@ -142,6 +142,9 @@ fun ControlCenter(
             CcPage.Main -> onClose()
             CcPage.Inputs -> vm.overlay = Overlay.ControlCenter(CcPage.Main)
             CcPage.InputSettings -> vm.overlay = Overlay.ControlCenter(CcPage.Inputs)
+            // QL-BEGIN
+            CcPage.Quiz -> vm.overlay = Overlay.ControlCenter(CcPage.Main)
+            // QL-END
             CcPage.Update, CcPage.Setup -> vm.overlay = Overlay.ControlCenter(CcPage.Main)
         }
     }
@@ -207,6 +210,9 @@ fun ControlCenter(
                             CcPage.InputSettings -> InputSettingsPage(vm, visible)
                             CcPage.Update -> UpdatePage(vm, visible)
                             CcPage.Setup -> SetupPage(vm, visible, onOpen)
+                            // QL-BEGIN: QuizLock's parent panel lives in its own package.
+                            CcPage.Quiz -> cn.quizlock.aerial.quizlock.QuizPanel(vm, visible)
+                            // QL-END
                         }
                     }
                 }
@@ -346,6 +352,14 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
                 onClick = { Restricted.start(); vm.overlay = Overlay.None },
             )
         }
+        // QL-BEGIN: the parent's door into QuizLock. A child icon in the existing top-right panel;
+        // the home screen itself stays empty (the gate is invisible until a quiz is due).
+        MenuRow(
+            Glyph.Kids, "小课间 · 家长设置",
+            trailing = if (cn.quizlock.aerial.quizlock.QuizGate.enabled) "已开启 ›" else "已暂停 ›",
+            onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Quiz) },
+        )
+        // QL-END
         // How Home looks (wallpaper, screensaver, focus style, hidden apps, weather) lives in one place.
         MenuRow(
             Glyph.Photo,

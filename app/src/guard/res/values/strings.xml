@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- QL-BEGIN: only app_name is overridden; every other string still comes from main.
+     Guard flavor resources win over main by name, so upstream strings.xml stays untouched. -->
+<resources>
+    <string name="app_name">小课间</string>
+</resources>
+<!-- QL-END -->

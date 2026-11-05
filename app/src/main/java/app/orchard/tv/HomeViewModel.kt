@@ -67,7 +67,9 @@ sealed interface Overlay {
     data object Kids : Overlay
 }
 
-enum class CcPage { Main, Inputs, InputSettings, Update, Setup }
+// QL-BEGIN: one extra Control Center page for the parent's QuizLock panel.
+enum class CcPage { Main, Inputs, InputSettings, Update, Setup, Quiz }
+// QL-END
 
 /**
  * Tiles a cold start reads whole before showing Home (two rows and a half, as many as can show);
