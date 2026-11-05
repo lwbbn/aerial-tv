@@ -1474,6 +1474,11 @@ class HomeGuardService : AccessibilityService() {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         val cls = event.className?.toString() ?: return
+        // QL-BEGIN: QuizLock HOME takeover. VIDAA starts its desktop by component, so upstream's
+        // HOME-filter-based stockHomes never sees it. QuizLock's own policy recognises those
+        // launcher activities and brings MainActivity back; other windows keep upstream behaviour.
+        if (cn.quizlock.aerial.quizlock.QuizHomeTakeover.onWindow(this, pkg, cls)) return
+        // QL-END
         // Only activities count as what is in front. Overlays and dialogs also raise this event:
         // TCL's voice assistant (com.tcl.walleve) does at boot on TCL 75S365C, and taking it for
         // an app the viewer chose kept the guard from taking over (PR #45).

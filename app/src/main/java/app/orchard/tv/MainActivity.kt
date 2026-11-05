@@ -1006,6 +1006,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // QL-BEGIN: enable QuizLock's HOME takeover once, when the install-time grant is present.
+        cn.quizlock.aerial.quizlock.QuizHomeTakeover.ensureOnLaunch(this)
+        // QL-END
         if (locked) return
         resumeWork()
     }
