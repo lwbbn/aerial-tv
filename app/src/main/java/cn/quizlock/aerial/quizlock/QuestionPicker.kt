@@ -36,7 +36,12 @@ data class Question(
             val j = rnd.nextInt(i + 1)
             val t = list[i]; list[i] = list[j]; list[j] = t
         }
-        return copy(options = list)
+        // Relabel by position: the letters always read A B / C D on screen, while the correct
+        // answer still moves around, so a child cannot memorize "it's always A".
+        val correct = options.firstOrNull { it.id == correctOptionId }
+        val relabeled = list.mapIndexed { i, o -> o.copy(id = ('A' + i).toString()) }
+        val newCorrectId = relabeled.firstOrNull { it.text == correct?.text }?.id ?: correctOptionId
+        return copy(options = relabeled, correctOptionId = newCorrectId)
     }
 }
 

@@ -44,12 +44,18 @@ object QuizControl {
     fun configure(ctx: Context, form: Map<String, String>): JSONObject {
         val cur = QuizPolicy.load(ctx)
         fun int(key: String, fallback: Int, min: Int, max: Int) =
-            form[key]?.trim()?.toIntOrNull()?.coerceIn(min, max) ?: fallback
+            form[key]?.trim()?.toIntOrNull()?.takeIf { it in min..max } ?: fallback
         fun text(key: String, fallback: String, allowed: Set<String>) =
             form[key]?.trim()?.takeIf { it in allowed } ?: fallback
 
         val next = cur.copy(
-            enabled = form["enabled"]?.let { it == "1" } ?: cur.enabled,
+            // Only the two values the phone page sends. Anything else (or a missing key) keeps
+            // the current state, so a stray request can never switch the gate off by accident.
+            enabled = when (form["enabled"]?.trim()) {
+                "1" -> true
+                "0" -> false
+                else -> cur.enabled
+            },
             intervalMinutes = int("quiz_interval_min", cur.intervalMinutes, 5, 120),
             unlockMinutes = int("unlock_duration_min", cur.unlockMinutes, 1, 120),
             maxRetry = int("max_retry", cur.maxRetry, 1, 10),

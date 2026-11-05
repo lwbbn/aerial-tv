@@ -375,13 +375,20 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
                 trailing = "$name ›",
             )
         }
-        Updates.available?.let { latest ->
-            MenuRow(
-                Glyph.Info,
-                stringResource(R.string.cc_update_available, latest),
-                onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Update) },
-            )
+        // QL-BEGIN: a derived build can never install the official APK (Updates.canInstall is
+        // false once the package name differs), so the "new version" row only misleads parents
+        // into sideloading an Aerial that would fight ours for Home. Kernel updates come from
+        // `git rebase upstream/main`, not from this button.
+        if (BuildConfig.FLAVOR != "guard") {
+            Updates.available?.let { latest ->
+                MenuRow(
+                    Glyph.Info,
+                    stringResource(R.string.cc_update_available, latest),
+                    onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Update) },
+                )
+            }
         }
+        // QL-END
 
         // Android 9 to 11, Aerial running uncompiled: reinstalling itself has the system compile it,
         // which needs the owner's confirmation there (SelfCompile; 12+ does it by itself).
@@ -405,7 +412,13 @@ private fun MainPage(vm: HomeViewModel, now: LocalDateTime, takeFocus: Boolean, 
             Box(Modifier.size(7.dp).clip(CircleShape).background(dot))
             Spacer(Modifier.width(8.dp))
             BasicText(text, style = Type.Caption, modifier = Modifier.weight(1f))
-            BasicText("Aerial ${Updates.current}", style = Type.Caption.copy(color = Palette.TertiaryLabel), modifier = Modifier.padding(end = 14.dp))
+            // QL-BEGIN: our own name in the derived build, so it cannot be mistaken for Aerial.
+            BasicText(
+                if (BuildConfig.FLAVOR == "guard") "小课间" else "Aerial ${Updates.current}",
+                style = Type.Caption.copy(color = Palette.TertiaryLabel),
+                modifier = Modifier.padding(end = 14.dp),
+            )
+            // QL-END
         }
     }
 }
