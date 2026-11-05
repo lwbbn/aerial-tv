@@ -98,9 +98,10 @@ object HomeSetup {
     fun isHomeRoleHeld(context: Context): Boolean = isResolvedHome(context)
 
     /** Whether OUR accessibility service is enabled in the system list or currently bound. */
-    fun isGuardOn(context: Context): Boolean =
-        QuizHomeTakeover.isGuardOn(context) ||
-            runCatching { app.orchard.tv.guard.HomeGuardService.isRunning }.getOrDefault(false)
+    // The Settings.Secure list is the system's own source of truth and is readable without any
+    // permission. The upstream service's static isRunning flag lags behind an unbind, which made
+    // a freshly switched-off row still claim "on".
+    fun isGuardOn(context: Context): Boolean = QuizHomeTakeover.isGuardOn(context)
 
     /**
      * The one-tap path. The RoleManager request MUST go through Activity.startActivityForResult:
@@ -253,9 +254,23 @@ fun HomeSetupRows(onOpen: ((Intent) -> Unit)? = null) {
         MenuRow(
             Glyph.Check,
             "辅助功能",
-            trailing = if (guardOn) "已开启 ✓" else "去开启 ›",
+            trailing = if (guardOn) "已开启 · 点此关闭" else "未开启 · 点此开启",
             onClick = {
-                if (!QuizHomeTakeover.tryEnableGuard(context)) {
+                // This row IS the accessibility switch. On firmwares that hide the system page
+                // (VIDAA disables com.android.settings outside engineering mode) the app writes
+                // the very same Settings.Secure value directly. Turning it off also pauses the
+                // takeover, otherwise ensureOnLaunch() would re-add the service on next resume.
+                val ok = if (guardOn) {
+                    QuizHomeTakeover.tryDisableGuard(context).also {
+                        if (it) QuizHomeTakeover.setEnabled(context, false)
+                    }
+                } else {
+                    QuizHomeTakeover.tryEnableGuard(context).also {
+                        if (it) QuizHomeTakeover.setEnabled(context, true)
+                    }
+                }
+                if (!ok) {
+                    QuizHomeTakeover.allowLeave()
                     open(HomeSetup.guardSettingsIntent(context))
                 }
                 toggleTick++
@@ -278,7 +293,7 @@ fun HomeSetupRows(onOpen: ((Intent) -> Unit)? = null) {
             )
             Spacer(Modifier.height(4.dp))
             BasicText(
-                "「辅助功能」开启后，按返回主屏幕会直接进入小课间。少数电视的系统设置没有这个入口，安装时授权一次后，点这里即可开启。",
+                "「辅助功能」这一行就是系统里的那个开关：点一下开启或关闭，不用进系统设置；个别电视安装时需授权一次。",
                 style = Type.Caption.copy(color = Palette.TertiaryLabel),
             )
         }

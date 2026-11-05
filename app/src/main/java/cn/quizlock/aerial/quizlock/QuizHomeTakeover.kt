@@ -91,6 +91,35 @@ object QuizHomeTakeover {
         }.getOrDefault(false)
     }
 
+    /**
+     * The other half of [tryEnableGuard]: remove ONLY our own component from the system's enabled
+     * list, leaving every other service untouched. This is exactly what the system accessibility
+     * page does when the parent switches our service off -- but it works on firmwares that disable
+     * that page (ordinary VIDAA mode disables the whole com.android.settings package, so no third
+     * party can reach its switch). Callers must also pause the takeover via [setEnabled], otherwise
+     * [ensureOnLaunch] would add the component straight back on the next resume.
+     */
+    fun tryDisableGuard(context: Context): Boolean {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_SECURE_SETTINGS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return false
+        val resolver = context.contentResolver
+        val me = guardComponent(context)
+        val current = runCatching {
+            Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        }.getOrDefault("")
+        val kept = current.split(':').filter { it.isNotBlank() && !it.equals(me, ignoreCase = true) }
+        if (kept.size == current.split(':').count { it.isNotBlank() }) return true
+        return runCatching {
+            Settings.Secure.putString(
+                resolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                kept.joinToString(":"),
+            )
+            true
+        }.getOrDefault(false)
+    }
+
     /** Called before deliberately opening a system page, so the parent is not pulled back. */
     fun allowLeave(ms: Long = 30_000L) {
         allowUntil = SystemClock.elapsedRealtime() + ms
