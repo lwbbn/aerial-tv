@@ -25,6 +25,9 @@ object QuizControl {
             .put("quiz_interval_min", p.intervalMinutes)
             .put("unlock_duration_min", p.unlockMinutes)
             .put("max_retry", p.maxRetry)
+            .put("rest_minutes", p.restMinutes)
+            .put("resting", QuizGate.resting)
+            .put("rest_remaining_min", (QuizGate.restRemainingMs() + 59_999L) / 60_000L)
             .put("grade", p.grade)
             .put("term", p.term)
             .put("textbook_version", p.textbook)
@@ -59,6 +62,7 @@ object QuizControl {
             intervalMinutes = int("quiz_interval_min", cur.intervalMinutes, 5, 120),
             unlockMinutes = int("unlock_duration_min", cur.unlockMinutes, 1, 120),
             maxRetry = int("max_retry", cur.maxRetry, 1, 10),
+            restMinutes = int("rest_minutes", cur.restMinutes, 1, 30),
             grade = text("grade", cur.grade, setOf("G5")),
             term = text("term", cur.term, setOf("AUTO", "UP", "DOWN")),
             textbook = text("textbook_version", cur.textbook, setOf("PEP", "BSD", "SJ", "CUSTOM")),

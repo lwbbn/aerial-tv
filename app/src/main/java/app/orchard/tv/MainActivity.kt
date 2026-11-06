@@ -324,7 +324,10 @@ class MainActivity : ComponentActivity() {
                 // otherwise HomeScreen's tile-grid key handler wins and the arrows go dead.
                 androidx.compose.foundation.layout.Box(
                     androidx.compose.ui.Modifier.onPreviewKeyEvent { e ->
-                        if (cn.quizlock.aerial.quizlock.QuizGate.quiz == null) return@onPreviewKeyEvent false
+                        if (!cn.quizlock.aerial.quizlock.QuizGate.blocking) return@onPreviewKeyEvent false
+                        // A rest has no option grid to drive: swallow every key so no Home tile
+                        // can be focused or launched until the countdown ends.
+                        if (cn.quizlock.aerial.quizlock.QuizGate.quiz == null) return@onPreviewKeyEvent true
                         if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent true
                         when (e.nativeKeyEvent.keyCode) {
                             android.view.KeyEvent.KEYCODE_DPAD_UP -> cn.quizlock.aerial.quizlock.QuizGate.moveFocus(-1, 0)
@@ -1095,9 +1098,8 @@ class MainActivity : ComponentActivity() {
 
     /** Opens an app, growing it out of its tile. */
     private fun launch(app: AppEntry, bounds: Rect?) {
-        // QL-BEGIN: a QuizLock quiz is up: no app opens until it is answered. The quiz layer over
-        // Home takes focus, so a launch from a stale key press dies here.
-        if (cn.quizlock.aerial.quizlock.QuizGate.quiz != null) return
+        // QL-BEGIN: a QuizLock quiz OR its mandatory rest is up: no app opens until it ends.
+        if (cn.quizlock.aerial.quizlock.QuizGate.blocking) return
         // QL-END
         // Kids and Elders mode shows only its own tiles, and none while locked; this is the last word.
         if (Restricted.active && (app.key !in Restricted.allowed || Restricted.lock != null)) {

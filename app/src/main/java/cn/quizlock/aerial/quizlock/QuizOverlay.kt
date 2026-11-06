@@ -39,11 +39,15 @@ import kotlinx.coroutines.delay
 /**
  * The quiz over the home screen: subject and unit tags, the stem, four options in a 2×2 grid the
  * remote moves through (D-pad by row and column, not linearly), and a hint from the last wrong
- * answer. A wrong answer swaps in a similar question (same knowledge point); the gate never
- * locks the child in — attempts exhausted also unlocks, with the hint left to read.
+ * answer. When the wrong-answer limit is reached the same layer shows the mandatory eye rest:
+ * a countdown with no skip button, no back key and no tappable control.
  */
 @Composable
 fun QuizOverlay() {
+    if (QuizGate.resting) {
+        QuizRestOverlay()
+        return
+    }
     val quiz = QuizGate.quiz ?: return
     val question = quiz.question
     val hint = QuizGate.hint
@@ -139,6 +143,49 @@ fun QuizOverlay() {
             BasicText(
                 "遥控器方向键选择 · 确定键提交",
                 style = Type.Headline.copy(fontSize = 16.sp, color = Palette.TertiaryLabel),
+            )
+        }
+    }
+}
+
+/** The non-skippable rest screen shown after the wrong-answer limit (docs/01 F-06 / F-07). */
+@Composable
+private fun QuizRestOverlay() {
+    var remaining by remember { mutableStateOf(QuizGate.restRemainingMs()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            remaining = QuizGate.restRemainingMs()
+            if (remaining <= 0L) break
+            delay(1_000)
+        }
+    }
+    BackHandler(enabled = true) {}
+    val totalSec = (remaining / 1_000L).coerceAtLeast(0L)
+    val clock = (totalSec / 60).toString().padStart(2, '0') + ":" +
+        (totalSec % 60).toString().padStart(2, '0')
+
+    Box(
+        Modifier.fillMaxSize().consumeTaps().background(Color(0xFF07080A)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            BasicText(
+                "休息一下",
+                style = Type.Title.copy(
+                    fontSize = 40.sp, fontWeight = FontWeight.W600, color = Color(0xFFF2F5FA),
+                ),
+            )
+            Spacer(Modifier.height(24.dp))
+            BasicText(
+                clock,
+                style = Type.Title.copy(
+                    fontSize = 72.sp, fontWeight = FontWeight.W600, color = Color(0xFF4C8DFF),
+                ),
+            )
+            Spacer(Modifier.height(24.dp))
+            BasicText(
+                "让眼睛歇一会儿，倒计时结束就能继续看啦",
+                style = Type.Headline.copy(fontSize = 20.sp, color = Color(0xFF9AA6B8)),
             )
         }
     }

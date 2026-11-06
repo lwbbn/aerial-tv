@@ -125,9 +125,12 @@ class QuestionPicker(
     /** Level 0 strictest, relaxing to all: unit → textbook → term → grade → whole bank. */
     private fun filter(policy: PickerPolicy, level: Int, excludeId: String?): List<Question> {
         val recentSet = recent.toSet()
+        // docs/08 §4: 8-1 月按上册, 2-7 月按下册. A calendar can only infer the TERM; it can
+        // never infer the current unit (school pace, holidays and the 2026 textbook revision all
+        // vary), which is why currentUnit stays a parent-set field.
         val term = if (policy.term == "AUTO") {
             val m = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1
-            if (m >= 9 || m <= 2) "UP" else "DOWN"
+            if (m >= 8 || m <= 1) "UP" else "DOWN"
         } else policy.term
         val subjects = policy.subjectWeights.keys
         return bank.filter { q ->

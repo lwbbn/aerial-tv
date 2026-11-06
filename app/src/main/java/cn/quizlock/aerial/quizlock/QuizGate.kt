@@ -80,6 +80,20 @@ object QuizGate {
     var flash by mutableStateOf<String?>(null)
         private set
 
+    /**
+     * Wall-clock deadline of a mandatory rest after too many wrong answers. Persisted, so a
+     * reboot, a force-stop or a policy reload cannot shorten it (docs/01 F-06 / F-07: the rest
+     * is a hard eye-care constraint, never skippable by answering). App restarts re-read it.
+     */
+    private var restUntilMs = 0L
+    var resting by mutableStateOf(false)
+        private set
+
+    /** True while a quiz OR a rest holds the TV: no app launch, no accumulated watch time. */
+    val blocking: Boolean get() = quiz != null || resting
+
+    fun restRemainingMs(): Long = (restUntilMs - System.currentTimeMillis()).coerceAtLeast(0L)
+
     /** Moves the option focus by a grid step; [dRow]/[dCol] keep the 2×2 layout, not linear ±1. */
     fun moveFocus(dRow: Int, dCol: Int) {
         val q = quiz ?: return
@@ -100,7 +114,8 @@ object QuizGate {
     class Quiz(val question: Question) {
         var attempts = 0
 
-        val maxAttempts: Int get() = policy.maxRetry + 1
+        /** Number of wrong answers allowed in this round before the mandatory rest. */
+        val maxAttempts: Int get() = policy.maxRetry
         var lastExplanation: String? = null
 
 
@@ -146,6 +161,12 @@ object QuizGate {
         if (lastTickAt == 0L) lastTickAt = at
         val since = (at - lastTickAt).coerceAtLeast(0L)
         lastTickAt = at
+        // A mandatory rest holds the loop: no watching time accumulates, no quiz is raised,
+        // and the rest layer over Home keeps the TV unavailable until its deadline passes.
+        if (resting) {
+            if (System.currentTimeMillis() >= restUntilMs) endRest()
+            return
+        }
         // A quiz (or a result hint) holds the loop: no watching time accumulates while it is up.
         if (quiz != null || busy || !policy.enabled) return
 
@@ -197,6 +218,7 @@ object QuizGate {
      * punishes (QuizLock's own rule) and the child is never stuck.
      */
     fun answer(optionId: String): Boolean {
+        if (resting) return true
         val q = quiz ?: return false
         busy = true
         val right = q.answer(optionId)
@@ -212,24 +234,49 @@ object QuizGate {
             return true
         }
         if (q.attempts >= q.maxAttempts) {
-            // Attempts exhausted: teach, then let them watch. Not a punishment.
-            notice = "已到尝试次数，看懂小提示再继续吧"
-            grantUnlock()
-            quiz = null
-            busy = false
-            saveState()
-            scheduleNext()
+            // Wrong-answer limit reached: an eye-care rest, never a punishment (docs/01 F-06).
+            // No unlock is granted — watching stays frozen until the countdown ends.
+            startRest()
             return true
         }
-        quiz = Quiz(picker.pickSimilar(q.question, QuizPolicy.toPickerPolicy(policy)))
+        val next = Quiz(picker.pickSimilar(q.question, QuizPolicy.toPickerPolicy(policy)))
+        // The round's wrong-answer count must survive the swap, otherwise the limit above can
+        // never be reached and the child could keep guessing forever.
+        next.attempts = q.attempts
+        next.lastExplanation = q.question.explanation
+        quiz = next
         focusIndex = 0
         hint = q.question.explanation
         flash = "差一点，再想想～"
-        quiz?.lastExplanation = q.question.explanation
-        quiz?.attempts = 0
         busy = false
         scheduleNext()
         return false
+    }
+
+    /** Starts the non-skippable rest and brings Home (with the rest layer) back to the front. */
+    private fun startRest() {
+        restUntilMs = System.currentTimeMillis() + policy.restMinutes * 60_000L
+        resting = true
+        quiz = null
+        busy = false
+        hint = null
+        flash = null
+        notice = null
+        watchMs = 0L
+        saveState()
+        bringHome()
+        DiagLog.i("$TAG: wrong-answer limit reached, resting ${policy.restMinutes}min")
+    }
+
+    private fun endRest() {
+        resting = false
+        restUntilMs = 0L
+        watchMs = 0L
+        lastTickAt = 0L
+        notice = "休息好啦，可以继续看了"
+        saveState()
+        scheduleNext()
+        DiagLog.i("$TAG: rest over, watching clock restarted")
     }
 
     private fun grantUnlock() {
@@ -259,7 +306,10 @@ object QuizGate {
         handler.post {
             if (app == null) { app = ctx.applicationContext; loadState() }
             policy = next
-            if (!next.enabled) { quiz = null; notice = null; hint = null; flash = null }
+            if (!next.enabled) {
+                quiz = null; notice = null; hint = null; flash = null
+                resting = false; restUntilMs = 0L  // a parent switching the guard off lifts the rest
+            }
             picker = QuestionPicker(bank = QuizBank.all)
             watchMs = 0L
             lastTickAt = 0L
@@ -273,12 +323,17 @@ object QuizGate {
     fun setEnabled(on: Boolean) {
         policy = policy.copy(enabled = on)
         QuizPolicy.save(app!!, policy)
-        if (!on) { quiz = null; notice = null }
+        if (!on) {
+            quiz = null; notice = null
+            resting = false; restUntilMs = 0L
+        }
+        saveState()
         scheduleNext()
     }
 
-    /** For the parent panel: a preview quiz raised by hand. */
+    /** For the parent panel: a preview quiz raised by hand. Never cuts a rest short. */
     fun preview() {
+        if (resting) return
         quiz = Quiz(picker.pick(QuizPolicy.toPickerPolicy(policy)))
         focusIndex = 0
         hint = null
@@ -308,6 +363,8 @@ object QuizGate {
         val p = prefs(ctx)
         day = p.getString("day", "") ?: ""
         watchMs = p.getLong("watch_ms", 0L)
+        restUntilMs = p.getLong("rest_until_ms", 0L)
+        resting = restUntilMs > System.currentTimeMillis()
         if (day != todayStr()) { day = todayStr(); watchMs = 0L }
     }
 
@@ -316,6 +373,7 @@ object QuizGate {
         prefs(ctx).edit()
             .putString("day", day)
             .putLong("watch_ms", watchMs)
+            .putLong("rest_until_ms", if (resting) restUntilMs else 0L)
             .apply()
     }
 }

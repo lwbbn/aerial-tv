@@ -409,9 +409,10 @@
   <div class="list">
     <label class="item"><span class="txt">每隔多久出一道题</span><input class="ql-num" type="number" id="qlInterval" min="5" max="120" inputmode="numeric"><span class="ks-unit">分钟</span></label>
     <label class="item"><span class="txt">答对后继续看</span><input class="ql-num" type="number" id="qlUnlock" min="1" max="120" inputmode="numeric"><span class="ks-unit">分钟</span></label>
-    <label class="item"><span class="txt">最多换题次数</span><input class="ql-num" type="number" id="qlRetry" min="1" max="10" inputmode="numeric"><span class="ks-unit">次</span></label>
+    <label class="item"><span class="txt">答错几次后休息</span><input class="ql-num" type="number" id="qlRetry" min="1" max="10" inputmode="numeric"><span class="ks-unit">次</span></label>
+    <label class="item"><span class="txt">休息时长</span><input class="ql-num" type="number" id="qlRest" min="1" max="30" inputmode="numeric"><span class="ks-unit">分钟</span></label>
   </div>
-  <p class="foot">答错不惩罚，会换一道同知识点的类似题；次数用完后放行为止。</p>
+  <p class="foot">答错会换一道同知识点的类似题；达到次数后进入不可跳过的护眼休息，倒计时结束自动继续，不扣时间、不惩罚。</p>
 
   <h2>学习进度</h2>
   <div class="list">
@@ -2470,6 +2471,7 @@ function renderQuiz() {
   if (document.activeElement !== $i('qlInterval')) $i('qlInterval').value = q.quiz_interval_min;
   if (document.activeElement !== $i('qlUnlock')) $i('qlUnlock').value = q.unlock_duration_min;
   if (document.activeElement !== $i('qlRetry')) $i('qlRetry').value = q.max_retry;
+  if (document.activeElement !== $i('qlRest')) $i('qlRest').value = q.rest_minutes;
   if (document.activeElement !== $i('qlUnit')) $i('qlUnit').value = q.current_unit || '';
   $i('qlEnabled').checked = !!q.enabled;
   $i('qlGrade').value = q.grade;
@@ -2479,8 +2481,10 @@ function renderQuiz() {
   $i('qlPinHint').textContent = q.pin_required
     ? '电视已设 PIN，保存与预览都需要填写'
     : '未设置 PIN，同网设备可直接保存（建议到电视设置里设一个）';
-  $i('qlStatus').textContent = '本轮已看 ' + q.watched_min + ' 分钟 · 约 ' + q.next_quiz_min +
-    ' 分钟后出题 · 内置题库 ' + q.question_count + ' 道 · 配置版本 v' + q.config_version +
+  $i('qlStatus').textContent = (q.resting
+      ? '护眼休息中 · 还剩 ' + q.rest_remaining_min + ' 分钟 · 休息结束后重新开始计时'
+      : '本轮已看 ' + q.watched_min + ' 分钟 · 约 ' + q.next_quiz_min + ' 分钟后出题') +
+    ' · 内置题库 ' + q.question_count + ' 道 · 配置版本 v' + q.config_version +
     (q.quiz_up ? ' · 正在答题' : '');
 }
 async function qlSave() {
@@ -2491,6 +2495,7 @@ async function qlSave() {
     quiz_interval_min: $i('qlInterval').value,
     unlock_duration_min: $i('qlUnlock').value,
     max_retry: $i('qlRetry').value,
+    rest_minutes: $i('qlRest').value,
     grade: $i('qlGrade').value,
     term: $i('qlTerm').value,
     textbook_version: $i('qlBook').value,

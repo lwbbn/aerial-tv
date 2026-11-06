@@ -10,7 +10,10 @@ data class QuizPolicy(
     val enabled: Boolean = true,
     val intervalMinutes: Int = 20,
     val unlockMinutes: Int = 15,
+    /** Wrong answers before a mandatory, non-skippable eye rest (docs/01 §5.2, F-06). */
     val maxRetry: Int = 3,
+    /** Length of that rest in minutes; the phone page can set 1..30, default 10. */
+    val restMinutes: Int = 10,
     val grade: String = "G5",
     val term: String = "UP",
     val textbook: String = "PEP",
@@ -27,6 +30,7 @@ data class QuizPolicy(
                 intervalMinutes = p.getInt("interval_minutes", 20),
                 unlockMinutes = p.getInt("unlock_minutes", 15),
                 maxRetry = p.getInt("max_retry", 3),
+                restMinutes = p.getInt("rest_minutes", 10),
                 grade = p.getString("grade", "G5") ?: "G5",
                 term = p.getString("term", "UP") ?: "UP",
                 textbook = p.getString("textbook", "PEP") ?: "PEP",
@@ -42,6 +46,7 @@ data class QuizPolicy(
                 .putInt("interval_minutes", policy.intervalMinutes)
                 .putInt("unlock_minutes", policy.unlockMinutes)
                 .putInt("max_retry", policy.maxRetry)
+                .putInt("rest_minutes", policy.restMinutes)
                 .putString("grade", policy.grade)
                 .putString("term", policy.term)
                 .putString("textbook", policy.textbook)
