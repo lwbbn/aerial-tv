@@ -1,5 +1,6 @@
 package cn.quizlock.aerial.quizlock
 
+import java.util.Calendar
 import kotlin.random.Random
 
 /**
@@ -24,6 +25,8 @@ data class Question(
     val options: List<QuestionOption>,
     val correctOptionId: String,
     val explanation: String = "",
+    /** True for entries produced by [QuestionFactory] when the local pack was expanded. */
+    val fresh: Boolean = false,
 ) {
     fun isCorrect(optionId: String): Boolean = optionId == correctOptionId
 
@@ -49,15 +52,34 @@ data class Question(
  * The picker, a faithful port of QuizLock's QuestionPicker (docs/08 §5): tag filter → weighted
  * random → LRU dedup → variant swap → graded fallback. Wrong answers prefer the same variant
  * group, then the same knowledge point, then the same unit; never out-of-syllabus.
+ *
+ * The bank is expanded once per process by [QuestionFactory]: every knowledge point gets a batch
+ * of template variants with fresh numbers/lines/words, so the child meets new stems every run.
+ * Picking itself only ever reads from that bank — it first **randomises over knowledge points**
+ * (weighted by subject, current unit and past mistakes) and then draws one question from the
+ * chosen point's own questions. No stem is invented at ask time.
  */
 class QuestionPicker(
-    private val bank: List<Question>,
+    bank: List<Question>,
     private val random: Random = Random.Default,
-    private val noRepeatWindow: Int = 10,
+    private val noRepeatWindow: Int = 24,
 ) {
+    private val pool = bank.toMutableList()
     private val recent = ArrayDeque<String>()
     private val wrongByKp = HashMap<String, Int>()
     private var shuffleSeed = 1
+    private var expanded = false
+
+    val size: Int get() = pool.size
+    val generatedCount: Int get() = pool.count { it.fresh }
+    val knowledgePointCount: Int get() = pool.map { it.knowledgePoint }.toSet().size
+
+    /** Expands the local pack once, using the current policy's grade / term / textbook tags. */
+    fun ensureExpanded(policy: PickerPolicy) {
+        if (expanded) return
+        expanded = true
+        pool.addAll(QuestionFactory.expand(policy, PER_KIND))
+    }
 
     fun recordAnswer(q: Question, correct: Boolean) {
         if (!correct) wrongByKp[q.knowledgePoint] = (wrongByKp[q.knowledgePoint] ?: 0) + 1
@@ -69,6 +91,7 @@ class QuestionPicker(
 
     /** Picks the next question; relaxes filters level by level so the lock can never jam. */
     fun pick(policy: PickerPolicy, excludeId: String? = null): Question {
+        ensureExpanded(policy)
         for (level in 0..4) {
             val candidates = filter(policy, level, excludeId)
             if (candidates.isEmpty()) continue
@@ -76,8 +99,8 @@ class QuestionPicker(
             remember(q.id)
             return q.shuffled(shuffleSeed++)
         }
-        if (bank.isEmpty()) throw IllegalStateException("题库为空")
-        val q = bank.firstOrNull { it.id != excludeId } ?: bank.first()
+        if (pool.isEmpty()) throw IllegalStateException("题库为空")
+        val q = pool.firstOrNull { it.id != excludeId } ?: pool.first()
         remember(q.id)
         return q.shuffled(shuffleSeed++)
     }
@@ -87,22 +110,23 @@ class QuestionPicker(
      * same unit → graded fallback. Repeating a same-group question beats jumping out of syllabus.
      */
     fun pickSimilar(origin: Question, policy: PickerPolicy, extraExcludeId: String? = null): Question {
+        ensureExpanded(policy)
         val excluded = mutableSetOf(origin.id)
         if (extraExcludeId != null) excluded.add(extraExcludeId)
         val recentSet = recent.toSet()
 
-        fun pool(match: (Question) -> Boolean): List<Question> {
+        fun inPool(match: (Question) -> Boolean): List<Question> {
             val fresh = ArrayList<Question>(); val seen = ArrayList<Question>()
-            for (q in bank) {
+            for (q in this.pool) {
                 if (excluded.contains(q.id) || !match(q)) continue
                 if (q.id in recentSet) seen.add(q) else fresh.add(q)
             }
             return fresh + seen
         }
 
-        val sameGroup = pool { it.variantGroup == origin.variantGroup }
-        val sameKp = pool { it.knowledgePoint == origin.knowledgePoint }
-        val sameUnit = pool { it.subject == origin.subject && it.unit == origin.unit }
+        val sameGroup = inPool { it.variantGroup == origin.variantGroup }
+        val sameKp = inPool { it.knowledgePoint == origin.knowledgePoint }
+        val sameUnit = inPool { it.subject == origin.subject && it.unit == origin.unit }
         val chosen = when {
             sameGroup.isNotEmpty() -> weightedPick(sameGroup, policy)
             sameKp.isNotEmpty() -> weightedPick(sameKp, policy)
@@ -119,21 +143,15 @@ class QuestionPicker(
             if (candidates.isEmpty()) continue
             return weightedPick(candidates, policy)
         }
-        return bank.firstOrNull { it.id !in excluded } ?: bank.first()
+        return pool.firstOrNull { it.id !in excluded } ?: pool.first()
     }
 
     /** Level 0 strictest, relaxing to all: unit → textbook → term → grade → whole bank. */
     private fun filter(policy: PickerPolicy, level: Int, excludeId: String?): List<Question> {
         val recentSet = recent.toSet()
-        // docs/08 §4: 8-1 月按上册, 2-7 月按下册. A calendar can only infer the TERM; it can
-        // never infer the current unit (school pace, holidays and the 2026 textbook revision all
-        // vary), which is why currentUnit stays a parent-set field.
-        val term = if (policy.term == "AUTO") {
-            val m = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1
-            if (m >= 8 || m <= 1) "UP" else "DOWN"
-        } else policy.term
+        val term = resolveTerm(policy)
         val subjects = policy.subjectWeights.keys
-        return bank.filter { q ->
+        return pool.filter { q ->
             if (excludeId != null && q.id == excludeId) return@filter false
             if (level <= 3 && q.grade != policy.grade) return@filter false
             if (level <= 2 && q.term != term) return@filter false
@@ -146,29 +164,55 @@ class QuestionPicker(
         }
     }
 
+    /**
+     * Randomises the **knowledge point** first, then draws one question from that point's own
+     * questions. Subject weights, the current unit and recent mistakes bias which point is
+     * chosen; the number of questions in a point does not, so points are mixed evenly.
+     */
     private fun weightedPick(candidates: List<Question>, policy: PickerPolicy): Question {
-        val weights = DoubleArray(candidates.size)
+        val groups = candidates.groupBy { it.knowledgePoint }.toList()
+        val weights = DoubleArray(groups.size)
         var total = 0.0
-        for ((i, q) in candidates.withIndex()) {
-            var w = policy.subjectWeights[q.subject] ?: 0.2
-            if (policy.currentUnit.isNotEmpty() && q.unit == policy.currentUnit) w *= 2.0
-            val wrong = wrongByKp[q.knowledgePoint] ?: 0
-            if (wrong > 0) w *= 1.0 + kotlin.math.min(3, wrong) * 0.3
+        for ((i, group) in groups.withIndex()) {
+            val w = weightOf(group.second.first(), policy)
             weights[i] = w
             total += w
         }
         var r = random.nextDouble() * total
-        for (i in candidates.indices) {
+        var chosenIndex = groups.lastIndex
+        for (i in groups.indices) {
             r -= weights[i]
-            if (r <= 0) return candidates[i]
+            if (r <= 0) { chosenIndex = i; break }
         }
-        return candidates.last()
+        val chosen = groups[chosenIndex].second
+        return chosen[random.nextInt(chosen.size)]
+    }
+
+    private fun weightOf(q: Question, policy: PickerPolicy): Double {
+        var w = policy.subjectWeights[q.subject] ?: 0.2
+        if (policy.currentUnit.isNotEmpty() && q.unit == policy.currentUnit) w *= 2.0
+        val wrong = wrongByKp[q.knowledgePoint] ?: 0
+        if (wrong > 0) w *= 1.0 + kotlin.math.min(3, wrong) * 0.3
+        return w
     }
 
     private fun remember(id: String) {
         recent.remove(id)
         recent.addLast(id)
-        val limit = minOf(noRepeatWindow, (bank.size * 0.6).toInt())
+        val limit = minOf(noRepeatWindow, (pool.size * 0.6).toInt())
         while (recent.size > limit) recent.removeFirst()
+    }
+
+    companion object {
+        /** Variants laid out per knowledge point when the local pack expands. */
+        const val PER_KIND = 36
+
+        /** docs/08 §4: 8-1 月按上册, 2-7 月按下册. A calendar can only infer the TERM; the
+         * current unit stays a parent-set field (school pace, holidays, 2026 textbook revision). */
+        fun resolveTerm(policy: PickerPolicy): String {
+            if (policy.term != "AUTO") return policy.term
+            val m = Calendar.getInstance().get(Calendar.MONTH) + 1
+            return if (m >= 8 || m <= 1) "UP" else "DOWN"
+        }
     }
 }

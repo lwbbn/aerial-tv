@@ -35,7 +35,9 @@ object QuizControl {
             .put("watched_min", watchedMs / 60_000L)
             .put("next_quiz_min", ((p.intervalMinutes * 60_000L - watchedMs) / 60_000L).coerceAtLeast(0))
             .put("quiz_up", QuizGate.quiz != null)
-            .put("question_count", QuizBank.all.size)
+            .put("question_count", QuizGate.poolSize())
+            .put("generated_count", QuizGate.generatedCount())
+            .put("knowledge_point_count", QuizGate.knowledgePointCount())
             .put("config_version", p.configVersion)
             .put("pin_required", AerialSettings.pinSet)
     }

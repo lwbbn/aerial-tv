@@ -134,6 +134,9 @@ object QuizGate {
             app = context.applicationContext
             policy = QuizPolicy.load(app!!)
             loadState()
+            // Expand the local pack right away so the parent's status page shows the real bank
+            // size even before the first quiz has ever been raised.
+            picker.ensureExpanded(QuizPolicy.toPickerPolicy(policy))
         }
         if (running) return
         running = true
@@ -190,6 +193,11 @@ object QuizGate {
     /** Watching time that has passed since the last quiz, in ms. */
     fun watchedSinceQuizMs(): Long = watchMs
 
+    /** Local pack size after expansion, for the parent's status page. */
+    fun poolSize(): Int = picker.size
+    fun generatedCount(): Int = picker.generatedCount
+    fun knowledgePointCount(): Int = picker.knowledgePointCount
+
     fun nextQuizAtMs(): Long = policy.intervalMinutes * 60_000L
 
     private fun raiseQuiz(why: String) {
@@ -199,7 +207,8 @@ object QuizGate {
         hint = null
         flash = null
         busy = false
-        DiagLog.i("$TAG: quiz up ($why), ${q.knowledgePoint}")
+        DiagLog.i("$TAG: quiz up ($why), ${q.knowledgePoint} id=${q.id} " +
+            "correct=${q.correctOptionId} fresh=${q.fresh} pool=${picker.size}")
         bringHome()
     }
 
@@ -248,6 +257,8 @@ object QuizGate {
         focusIndex = 0
         hint = q.question.explanation
         flash = "差一点，再想想～"
+        DiagLog.i("$TAG: swap ${next.question.knowledgePoint} id=${next.question.id} " +
+            "correct=${next.question.correctOptionId} fresh=${next.question.fresh} attempts=${next.attempts}")
         busy = false
         scheduleNext()
         return false
@@ -293,6 +304,7 @@ object QuizGate {
         val ctx = app ?: return
         policy = QuizPolicy.load(ctx)
         picker = QuestionPicker(bank = QuizBank.all)
+        picker.ensureExpanded(QuizPolicy.toPickerPolicy(policy))
         scheduleNext()
     }
 
@@ -311,6 +323,7 @@ object QuizGate {
                 resting = false; restUntilMs = 0L  // a parent switching the guard off lifts the rest
             }
             picker = QuestionPicker(bank = QuizBank.all)
+            picker.ensureExpanded(QuizPolicy.toPickerPolicy(next))
             watchMs = 0L
             lastTickAt = 0L
             saveState()
@@ -334,11 +347,14 @@ object QuizGate {
     /** For the parent panel: a preview quiz raised by hand. Never cuts a rest short. */
     fun preview() {
         if (resting) return
-        quiz = Quiz(picker.pick(QuizPolicy.toPickerPolicy(policy)))
+        val picked = picker.pick(QuizPolicy.toPickerPolicy(policy))
+        quiz = Quiz(picked)
         focusIndex = 0
         hint = null
         flash = null
         busy = false
+        DiagLog.i("$TAG: preview ${picked.knowledgePoint} id=${picked.id} " +
+            "correct=${picked.correctOptionId} fresh=${picked.fresh} pool=${picker.size}")
         scheduleNext()
     }
 

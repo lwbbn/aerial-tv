@@ -1,9 +1,11 @@
 package cn.quizlock.aerial.quizlock
 
 /**
- * The built-in question bank: PEP (人教版) grade 5, first term (上册) — carried over as-is from
- * QuizLock's Dart demo bank (12 math, 10 Chinese, 10 English). Original demo content for the
- * closed loop; the real bank ships as reviewed, versioned Question Packs (docs/08).
+ * The reviewed seed of the built-in question bank: PEP (人教版) grade 5, first term (上册) —
+ * carried over as-is from QuizLock's Dart demo bank (12 math, 10 Chinese, 10 English). These 32
+ * hand-checked stems are the floor, not the whole bank: [QuestionFactory] expands them per
+ * knowledge point into a few hundred local variants when [QuestionPicker] starts, and the
+ * picker mixes knowledge points before drawing one question. Nothing is fetched at ask time.
  *
  * Subject labels are Chinese ("数学" / "语文" / "英语") and are data, not an enum (ADR-017);
  * they must match the keys of QuizPolicy.subjectWeights. Every question's correct option is

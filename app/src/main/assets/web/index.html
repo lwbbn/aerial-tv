@@ -424,7 +424,7 @@
       <select class="ql-select" id="qlBook"><option value="PEP">人教版</option><option value="BSD">北师大版</option><option value="SJ">苏教版</option><option value="CUSTOM">自定义</option></select></label>
     <label class="item field"><span class="txt">当前单元</span><input class="ql-text" type="text" id="qlUnit" placeholder="如：小数乘法" maxlength="40"></label>
   </div>
-  <p class="foot">题目挂知识点而非章节号，换教材只换映射；当前单元用于优先抽最近学的内容。</p>
+  <p class="foot">题目挂知识点而非章节号；本地题库按知识点展开成数百道，每次启动重新搭配，抽题时先随机知识点、再从该知识点里抽一题。当前单元用于优先抽最近学的内容。</p>
 
   <h2>家长 PIN</h2>
   <div class="list">
@@ -2484,7 +2484,8 @@ function renderQuiz() {
   $i('qlStatus').textContent = (q.resting
       ? '护眼休息中 · 还剩 ' + q.rest_remaining_min + ' 分钟 · 休息结束后重新开始计时'
       : '本轮已看 ' + q.watched_min + ' 分钟 · 约 ' + q.next_quiz_min + ' 分钟后出题') +
-    ' · 内置题库 ' + q.question_count + ' 道 · 配置版本 v' + q.config_version +
+    ' · 本地题库 ' + q.question_count + ' 道（新题 ' + q.generated_count + '）/ ' +
+    q.knowledge_point_count + ' 个知识点 · 配置版本 v' + q.config_version +
     (q.quiz_up ? ' · 正在答题' : '');
 }
 async function qlSave() {

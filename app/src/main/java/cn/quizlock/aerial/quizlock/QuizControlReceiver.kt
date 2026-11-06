@@ -31,10 +31,12 @@ class QuizControlReceiver : BroadcastReceiver() {
                     intervalMinutes = intent.getIntExtra("interval", old.intervalMinutes),
                     unlockMinutes = intent.getIntExtra("unlock", old.unlockMinutes),
                     maxRetry = intent.getIntExtra("retry", old.maxRetry),
+                    restMinutes = intent.getIntExtra("rest", old.restMinutes),
                 )
                 QuizPolicy.save(ctx, p)
                 QuizGate.refresh()
-                DiagLog.i("QL: policy set interval=${p.intervalMinutes} unlock=${p.unlockMinutes} enabled=${p.enabled}")
+                DiagLog.i("QL: policy set interval=${p.intervalMinutes} unlock=${p.unlockMinutes} " +
+                    "retry=${p.maxRetry} rest=${p.restMinutes} enabled=${p.enabled}")
             }
             ACTION_STATUS -> DiagLog.i(
                 "QL: watching=${QuizGate.watchedSinceQuizMs()}ms " +

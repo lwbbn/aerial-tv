@@ -926,6 +926,8 @@ class MainActivity : ComponentActivity() {
                 enabled = intent.getBooleanExtra("enabled", old.enabled),
                 intervalMinutes = intent.getIntExtra("interval", old.intervalMinutes),
                 unlockMinutes = intent.getIntExtra("unlock", old.unlockMinutes),
+                maxRetry = intent.getIntExtra("retry", old.maxRetry),
+                restMinutes = intent.getIntExtra("rest", old.restMinutes),
             ))
             cn.quizlock.aerial.quizlock.QuizGate.refresh()
             return
